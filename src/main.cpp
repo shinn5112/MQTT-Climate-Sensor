@@ -30,6 +30,7 @@ struct {
   float battery_voltage; // 4 bytes, 16 total
   float temperature;     // 4 bytes, 20 total
   float humidity;        // 4 bytes, 24 total
+  uint32_t reset_state;
 } rtcData;
 
 
@@ -66,6 +67,10 @@ void loop() {
   if(isnan(temperature) || isnan(humidity)) ESP.restart();
 
   battery_voltage = analogRead(A0);
+  if (battery_voltage == 1024){
+    Serial.print("rf disabled screwed up the analog read... resetting.");
+    ESP.reset();
+  }
   Serial.println(battery_voltage);
   battery_voltage *= (4.2/1035.5); // calculated value for my resistor setup.
   Serial.print("Humidity: ");
@@ -90,6 +95,7 @@ void loop() {
   delay(1); // give time to complete the action
 
   // deep sleep to save power, disable radio.
+  rtcData.reset_state = 1;
   ESP.deepSleep(wait, WAKE_RF_DISABLED);
 }
 
