@@ -110,11 +110,11 @@ void transmit(){
 
   // send over MQTT
   dtostrf(temperature, 4, 2, payload);  // convert temp to char array
-  client.publish(publish_topic_temperature, payload, false, 0);
+  client.publish(publish_topic_temperature, payload, true, 0);
   dtostrf(humidity, 4, 2, payload); // convert humidity to char array
-  client.publish(publish_topic_humidity, payload, false, 0);
+  client.publish(publish_topic_humidity, payload, true, 0);
   dtostrf(battery_voltage, 4, 2, payload); // covert battyer percent to char array
-  client.publish(publish_topic_battery, payload);
+  client.publish(publish_topic_battery, payload, true, 0);
 }
 
 /**
