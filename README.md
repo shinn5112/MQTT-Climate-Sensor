@@ -5,9 +5,11 @@ This was built using an ESP8266 and a DHT22.
 Because this sensor is compatiable with MQTT, it is also compatible
 with the open source home automation platform [Home Assistant](https://www.home-assistant.io/).
 
-In other to use this software, you will need to install the following libraries:
+In order to use this software, you will need to install the following libraries:
 1. MQTT by Joel Gaehwiler
 2. DHT by Mark Ruys
+
+These libraries are included as dependencies in the .pio file.
 
 It should also be noted that this was developed using Visual Studio Code with the [PlatformIO](https://platformio.org/) addon.
 I reccomend you use platformio since this project was written using its dev style, but it should
