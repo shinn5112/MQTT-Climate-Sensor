@@ -9,7 +9,7 @@ In order to use this software, you will need to install the following libraries:
 1. MQTT by Joel Gaehwiler
 2. DHT by Mark Ruys
 
-These libraries are included as dependencies in the .pio file.
+These libraries are included as dependencies in the platformio.ini file.
 
 It should also be noted that this was developed using Visual Studio Code with the [PlatformIO](https://platformio.org/) addon.
 I reccomend you use platformio since this project was written using its dev style, but it should
