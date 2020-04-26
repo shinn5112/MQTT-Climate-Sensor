@@ -57,5 +57,3 @@ const char publish_topic_humidity[] = "";
 const char publish_topic_battery[] = "";
 
 ```
-
-You will also need to edit the dht_pin on line 14 to reflect your own usage.
