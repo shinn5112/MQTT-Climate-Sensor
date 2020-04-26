@@ -6,6 +6,7 @@ Because this sensor is compatiable with MQTT, it is also compatible
 with the open source home automation platform [Home Assistant](https://www.home-assistant.io/).
 
 In order to use this software, you will need to install the following libraries:
+
 1. MQTT by Joel Gaehwiler
 2. DHT by Mark Ruys
 
