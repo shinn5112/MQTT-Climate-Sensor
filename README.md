@@ -19,9 +19,23 @@ the Arduino IDE requires.
 This solution is pretty much plug and play. You will need to create a settings.h file containing the following:
 
 ```c++
+#ifndef Arduino_h
+    #include <Arduino.h>
+#endif
+
+#ifndef WiFi_h
+    #include <ESP8266WiFi.h>
+#endif
+// #define debug
+
 // General Settings
 const int dht_pin = 4;
-const int wait = 300e6;        // this is 5 minutes
+const int wait = 300e6;                  // this 5 minutes
+const int resistence_divisor = 1023.0;   // this will most likely be slightly different for each device due to hardware imperfections
+const float max_bat_voltage = 4.2;      // max battery voltage
+
+const float temp_threshold = 0.5;        // temperature retransmit trigger threshold
+const float hum_threshold = 0.5;         // humidity retransmit trigger threshold
 
 // WiFi Settings
 const char ssid[] = "";

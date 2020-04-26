@@ -16,6 +16,7 @@ float temperature, humidity, battery_voltage;
 void transmit();
 void connect();
 void mqtt_connect();
+void analog_sanity_check();
 uint32_t calculateCRC32(const uint8_t *data, size_t length);
 
 // structs
@@ -26,11 +27,10 @@ struct {
   uint32_t crc32;        // 4 bytes
   uint8_t channel;       // 1 byte,   5 in total
   uint8_t bssid[6];      // 6 bytes, 11 in total
-  uint8_t padding;       // 1 byte,  12 in total
+  uint8_t reset;         // 1 byte,  12 in total
   float battery_voltage; // 4 bytes, 16 total
   float temperature;     // 4 bytes, 20 total
   float humidity;        // 4 bytes, 24 total
-  uint32_t reset_state;
 } rtcData;
 
 
@@ -51,7 +51,8 @@ void setup() {
     uint32_t crc = calculateCRC32( ((uint8_t*) &rtcData) + 4, sizeof(rtcData) - 4 );
     if(crc == rtcData.crc32) {
       rtcValid = true;
-    }
+      Serial.println("RTC data is valid");
+    }else Serial.println("RTC data is invalid");
   }
 }
 
@@ -67,12 +68,9 @@ void loop() {
   if(isnan(temperature) || isnan(humidity)) ESP.restart();
 
   battery_voltage = analogRead(A0);
-  if (battery_voltage == 1024){
-    Serial.print("rf disabled screwed up the analog read... resetting.");
-    ESP.reset();
-  }
-  Serial.println(battery_voltage);
-  battery_voltage *= (4.2/1035.5); // calculated value for my resistor setup.
+  battery_voltage *= (max_bat_voltage/resistence_divisor); // calculated value for my resistor setup.
+  analog_sanity_check();
+  
   Serial.print("Humidity: ");
   Serial.println(humidity);
   Serial.print("Temperature: ");
@@ -82,7 +80,10 @@ void loop() {
 
   // check to see if we need to transmit data
   if(rtcValid){ // if we can access the rtcData and that it is valid, check to see if we need to transmit data
-    if(!(battery_voltage == rtcData.battery_voltage && abs(temperature - rtcData.temperature) < 0.5 && abs(humidity - rtcData.humidity) < 0.5)) transmit();
+    if(!(battery_voltage == rtcData.battery_voltage 
+      && abs(temperature - rtcData.temperature) < temp_threshold 
+      && abs(humidity - rtcData.humidity) < hum_threshold)) 
+       transmit();
     else Serial.println("No data changes, nothing to transmit.");
   }
   // if we do not have valid rtcData, we transmit to update/write the rtcData.
@@ -95,14 +96,45 @@ void loop() {
   delay(1); // give time to complete the action
 
   // deep sleep to save power, disable radio.
-  rtcData.reset_state = 1;
   ESP.deepSleep(wait, WAKE_RF_DISABLED);
+}
+
+/**
+ * Within the ESP8266 SDK, there is a flaw that causes innacurate reading to come from the ADC on A0
+ * when going into ESP.deepsleep with rf disabled. This issue can be fixed by issuing and ESP reset.
+ * This function performs a sanity check on the read value from A0 to see if the difference between
+ * the current reading and the last reading is greater than what is expected. If it is, then
+ * we assume that we have had a bad reading due to the SDK issue and reset the ESP.
+ */ 
+void analog_sanity_check(){
+  if (rtcValid){
+    #ifdef debug
+    Serial.print("Current battery voltage: ");
+    Serial.println(battery_voltage);
+    Serial.print("Last battery voltage: ");
+    Serial.println(rtcData.battery_voltage);
+    #endif
+    if (fabs(battery_voltage - rtcData.battery_voltage) > 0.15 && !rtcData.reset){ // if the change is unexpected and we have not recently reset
+      Serial.print("rf disabled screwed up the analog read... resetting.");
+      rtcData.reset = 1; // prevents an endless loop of resets
+      rtcData.crc32 = calculateCRC32(((uint8_t*) &rtcData) + 4, sizeof( rtcData ) - 4); // cacluate checksum. The =/- 4 skips the checksum in the struct
+      ESP.rtcUserMemoryWrite(0, (uint32_t*) &rtcData, sizeof(rtcData));
+      delay(5); // allow time for the reset flag to be written
+      ESP.reset();
+    }else{
+      Serial.println("No reset needed.");
+      rtcData.reset = 0;
+      rtcData.crc32 = calculateCRC32(((uint8_t*) &rtcData) + 4, sizeof( rtcData ) - 4); // cacluate checksum. The =/- 4 skips the checksum in the struct
+      ESP.rtcUserMemoryWrite(0, (uint32_t*) &rtcData, sizeof(rtcData));
+    }
+  }
 }
 
 /**
  * Handles connections to WiFi and MQTT, then transmits the collected data.
  */
 void transmit(){
+  Serial.println("Significant changes detected, transmitting data");
   // connect to wifi and MQTT
   connect();
   mqtt_connect();
@@ -124,7 +156,8 @@ void transmit(){
  * using a static IP address and by using previously discovered network
  * settings. In the event that the WiFI channel changes, it will 
  * attempt to discover the new channel and update the sensor's
- * settings that are stored in the rtc flash memory.
+ * settings that are stored in the rtc flash memory as well as store
+ * the current sensor readings to be used during the next run.
  */
 void connect(){
   int retries = 0;
@@ -195,10 +228,24 @@ void connect(){
   rtcData.battery_voltage = battery_voltage;
   rtcData.temperature = temperature;
   rtcData.humidity = humidity;
-  rtcData.crc32 = calculateCRC32(((uint8_t*) &rtcData) + 4, sizeof( rtcData ) - 4); // cacluate checksum.
-  ESP.rtcUserMemoryWrite(0, (uint32_t*) &rtcData, sizeof(rtcData));
+  rtcData.crc32 = calculateCRC32(((uint8_t*) &rtcData) + 4, sizeof( rtcData ) - 4); // cacluate checksum. The =/- 4 skips the checksum in the struct
 
- 
+  #ifdef debug
+  Serial.println("Data to be written to RTC:");
+  Serial.print("Battery Voltage: ");
+  Serial.println(rtcData.battery_voltage);
+  Serial.print("Temperature: ");
+  Serial.println(rtcData.temperature);
+  Serial.print("Humidity: ");
+  Serial.println(rtcData.humidity);
+  Serial.print("BSSID: ");
+  Serial.println((unsigned int)rtcData.bssid);
+  Serial.print("WiFi Channel: ");
+  Serial.println(rtcData.channel);
+  #endif
+
+  // write the data to the RTC
+  ESP.rtcUserMemoryWrite(0, (uint32_t*) &rtcData, sizeof(rtcData));
 }
 
 /**
